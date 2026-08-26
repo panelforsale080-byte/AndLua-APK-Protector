@@ -12,10 +12,10 @@ public class GateActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         TextView view = new TextView(this);
-        view.setTextColor(Color.WHITE);
+        view.setTextColor(0xFFF3E5AB);
         view.setBackgroundColor(Color.BLACK);
         view.setPadding(48, 48, 48, 48);
-        view.setText("AndLua protector runtime…");
+        view.setText("Axcel Loki");
         setContentView(view);
 
         try {
@@ -27,8 +27,8 @@ public class GateActivity extends Activity {
             startActivity(intent);
             finish();
         } catch (Exception e) {
-            view.setText("Protect bootstrap failed:\n" + e);
-            Toast.makeText(this, String.valueOf(e.getMessage()), Toast.LENGTH_LONG).show();
+            view.setText("Axcel Loki\n");
+            Toast.makeText(this, "Unable to open this package", Toast.LENGTH_LONG).show();
         }
     }
 }

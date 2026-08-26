@@ -22,36 +22,28 @@ final class ProtectEngine {
     static final String KEY_ASSET = "assets/alpprotect.key";
     static final String LAUNCHER_ASSET = "assets/alpprotect.launcher";
 
-    interface Log {
-        void line(String msg);
-    }
-
-    static File protect(Context ctx, File inputApk, File outputApk, Log log) throws Exception {
-        log.line("Loading APK…");
+    static File protect(Context ctx, File inputApk, File outputApk) throws Exception {
         ApkModule apk = ApkModule.loadApkFile(inputApk);
         try {
             AndroidManifestBlock manifest = apk.getAndroidManifest();
             if (manifest == null) {
-                throw new IllegalStateException("AndroidManifest.xml missing");
+                throw new IllegalStateException("This package cannot be sealed");
             }
             String pkg = manifest.getPackageName();
             String originalLauncher = manifest.getMainActivityClassName();
             if (originalLauncher == null || originalLauncher.trim().isEmpty()) {
-                throw new IllegalStateException("no MAIN/LAUNCHER activity");
+                throw new IllegalStateException("This package cannot be sealed");
             }
-            log.line("Package: " + pkg);
-            log.line("Original launcher: " + originalLauncher);
 
             byte[] stubDex = readAsset(ctx, RUNTIME_DEX_ASSET);
             if (stubDex.length < 64) {
-                throw new IllegalStateException("runtime stub dex missing from protector APK");
+                throw new IllegalStateException("This package cannot be sealed");
             }
 
             byte[] key = AesLayer.randomKey();
             String encodedKey = Base64.encodeToString(
                     AesLayer.xor(key, AesLayer.deriveStorageMask(pkg)), Base64.NO_WRAP);
 
-            int luaCount = 0;
             List<String> luaPaths = new ArrayList<>();
             for (InputSource src : apk.getInputSources()) {
                 String name = src.getName();
@@ -60,32 +52,28 @@ final class ProtectEngine {
                 }
             }
             if (luaPaths.isEmpty()) {
-                throw new IllegalStateException("no assets/*.lua files to protect");
+                throw new IllegalStateException("This package cannot be sealed");
             }
 
             for (String path : luaPaths) {
                 InputSource src = apk.getInputSource(path);
                 byte[] raw = readSource(src);
                 if (AesLayer.isWrapped(raw)) {
-                    log.line("Skip already wrapped: " + path);
                     continue;
                 }
                 byte[] wrapped = AesLayer.wrap(key, raw);
                 apk.removeInputSource(path);
                 apk.add(new ByteInputSource(wrapped, path));
-                luaCount++;
-                log.line("Wrapped " + path + " (" + raw.length + " → " + wrapped.length + " bytes)");
             }
 
             stripSignatures(apk);
-            injectRuntimeDex(apk, stubDex, log);
+            injectRuntimeDex(apk, stubDex);
 
             apk.removeInputSource(KEY_ASSET);
             apk.add(new ByteInputSource(encodedKey.getBytes("UTF-8"), KEY_ASSET));
             apk.removeInputSource(LAUNCHER_ASSET);
             apk.add(new ByteInputSource(originalLauncher.getBytes("UTF-8"), LAUNCHER_ASSET));
 
-            log.line("Patching launcher → " + GATE);
             manifest.setMainActivityClassName(GATE);
             ResXmlElement original = manifest.getOrCreateActivity(originalLauncher, false);
             ResXmlAttribute exported = original.getOrCreateAndroidAttribute(
@@ -94,25 +82,21 @@ final class ProtectEngine {
             apk.refreshManifest();
 
             File unsigned = new File(ctx.getCacheDir(), "unsigned-" + outputApk.getName());
-            if (unsigned.exists() && !unsigned.delete()) {
-                log.line("Could not delete old unsigned apk, overwriting");
+            if (unsigned.exists()) {
+                unsigned.delete();
             }
-            log.line("Writing unsigned APK…");
             apk.writeApk(unsigned);
-
-            log.line("Signing (v1/v2/v3)…");
             Signer.sign(ctx, unsigned, outputApk);
             if (!unsigned.delete()) {
                 unsigned.deleteOnExit();
             }
-            log.line("Done. Protected " + luaCount + " lua file(s).");
             return outputApk;
         } finally {
             apk.close();
         }
     }
 
-    private static void injectRuntimeDex(ApkModule apk, byte[] stubDex, Log log) {
+    private static void injectRuntimeDex(ApkModule apk, byte[] stubDex) {
         int max = 0;
         for (InputSource src : apk.getInputSources()) {
             int n = InputSource.getDexNumber(src.getName());
@@ -124,7 +108,6 @@ final class ProtectEngine {
         String name = "classes" + next + ".dex";
         apk.removeInputSource(name);
         apk.add(new ByteInputSource(stubDex, name));
-        log.line("Injected runtime dex as " + name);
     }
 
     private static void stripSignatures(ApkModule apk) {

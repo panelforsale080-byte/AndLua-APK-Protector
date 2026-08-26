@@ -5,68 +5,68 @@ import android.util.Base64;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 final class AlpCrypto {
-    static final byte[] MAGIC = new byte[]{'A', 'L', 'P', '2'};
-    static final int VERSION = 1;
-    static final int NONCE_LEN = 12;
-    static final int TAG_BITS = 128;
+    static final byte[] MAGIC = new byte[]{'A', 'X', 'L', '1'};
+    static final byte[] MAGIC_LEGACY = new byte[]{'A', 'L', 'P', '2'};
+    static final String MARKER = "\n<<<AXL1>>>\n";
+    private static final int VERSION = 2;
+    private static final int NONCE_LEN = 12;
+    private static final int SALT_LEN = 16;
+    private static final int TAG_BITS = 128;
+    private static final int ROUNDS = 16384;
+    private static final int[] PEPPER = {
+            0xA7, 0x31, 0xC4, 0x19, 0x8E, 0x5B, 0xF0, 0x62,
+            0x3D, 0xAA, 0x07, 0xD1, 0x94, 0x2C, 0xE8, 0x51,
+            0x6F, 0xB3, 0x0A, 0x77, 0xC9, 0x14, 0xDE, 0x38,
+            0x91, 0x4F, 0xB8, 0x25, 0x6A, 0xE3, 0x0D, 0x7C
+    };
 
     private AlpCrypto() {}
 
     static boolean isWrapped(byte[] data) {
-        if (data == null || data.length < 4 + 1 + NONCE_LEN + 16) {
+        if (data == null) {
             return false;
         }
-        return data[0] == MAGIC[0]
-                && data[1] == MAGIC[1]
-                && data[2] == MAGIC[2]
-                && data[3] == MAGIC[3];
+        if (indexOf(data, MARKER.getBytes(StandardCharsets.UTF_8)) >= 0) {
+            return true;
+        }
+        return startsWith(data, MAGIC) || startsWith(data, MAGIC_LEGACY);
     }
 
-    static byte[] wrap(byte[] key, byte[] plaintext) throws Exception {
-        byte[] nonce = new byte[NONCE_LEN];
-        new SecureRandom().nextBytes(nonce);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"),
-                new GCMParameterSpec(TAG_BITS, nonce));
-        byte[] ct = cipher.doFinal(plaintext);
-        ByteBuffer buf = ByteBuffer.allocate(MAGIC.length + 1 + nonce.length + ct.length);
-        buf.put(MAGIC);
-        buf.put((byte) VERSION);
-        buf.put(nonce);
-        buf.put(ct);
-        return buf.array();
-    }
-
-    static byte[] unwrap(byte[] key, byte[] blob) throws Exception {
-        if (!isWrapped(blob)) {
+    static byte[] unwrap(byte[] master, byte[] blob) throws Exception {
+        byte[] payload = stripBanner(blob);
+        if (startsWith(payload, MAGIC_LEGACY)) {
+            return gcmDecryptLegacy(master, payload);
+        }
+        if (!startsWith(payload, MAGIC) || payload.length < MAGIC.length + 1 + SALT_LEN + 16) {
             return blob;
         }
-        ByteBuffer buf = ByteBuffer.wrap(blob);
+        ByteBuffer buf = ByteBuffer.wrap(payload);
         buf.position(MAGIC.length);
         int version = buf.get() & 0xff;
         if (version != VERSION) {
-            throw new IllegalStateException("unsupported ALP wrapper version " + version);
+            throw new IllegalStateException("unsupported seal");
         }
-        byte[] nonce = new byte[NONCE_LEN];
-        buf.get(nonce);
-        byte[] ct = new byte[buf.remaining()];
-        buf.get(ct);
-        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
-                new GCMParameterSpec(TAG_BITS, nonce));
-        return cipher.doFinal(ct);
+        byte[] salt = new byte[SALT_LEN];
+        buf.get(salt);
+        byte[] outer = new byte[buf.remaining()];
+        buf.get(outer);
+        byte[] k1 = stretch(master, salt, "AXL-K1");
+        byte[] k2 = stretch(master, salt, "AXL-K2");
+        byte[] inner = gcmDecryptRaw(k2, outer);
+        byte[] padded = gcmDecryptRaw(k1, inner);
+        return unpad(padded);
     }
 
     static byte[] deriveStorageMask(String packageName) throws Exception {
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
-        sha.update("ALP2-KEY-MASK-v1".getBytes(StandardCharsets.UTF_8));
+        sha.update(pepper());
+        sha.update("AXL1-KEY-MASK-v2".getBytes(StandardCharsets.UTF_8));
         sha.update(packageName.getBytes(StandardCharsets.UTF_8));
         return sha.digest();
     }
@@ -79,13 +79,117 @@ final class AlpCrypto {
         return out;
     }
 
-    static String encodeKey(byte[] rawKey, String packageName) throws Exception {
-        byte[] masked = xor(rawKey, deriveStorageMask(packageName));
-        return Base64.encodeToString(masked, Base64.NO_WRAP);
-    }
-
     static byte[] decodeKey(String encoded, String packageName) throws Exception {
         byte[] masked = Base64.decode(encoded, Base64.NO_WRAP);
         return xor(masked, deriveStorageMask(packageName));
+    }
+
+    static byte[] stripBanner(byte[] data) {
+        byte[] mark = MARKER.getBytes(StandardCharsets.UTF_8);
+        int idx = indexOf(data, mark);
+        if (idx < 0) {
+            return data;
+        }
+        int start = idx + mark.length;
+        byte[] out = new byte[data.length - start];
+        System.arraycopy(data, start, out, 0, out.length);
+        return out;
+    }
+
+    private static byte[] gcmDecryptRaw(byte[] key, byte[] blob) throws Exception {
+        if (blob.length < NONCE_LEN + 16) {
+            throw new IllegalStateException("truncated seal");
+        }
+        byte[] nonce = new byte[NONCE_LEN];
+        System.arraycopy(blob, 0, nonce, 0, NONCE_LEN);
+        byte[] ct = new byte[blob.length - NONCE_LEN];
+        System.arraycopy(blob, NONCE_LEN, ct, 0, ct.length);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
+                new GCMParameterSpec(TAG_BITS, nonce));
+        return cipher.doFinal(ct);
+    }
+
+    private static byte[] gcmDecryptLegacy(byte[] key, byte[] blob) throws Exception {
+        ByteBuffer buf = ByteBuffer.wrap(blob);
+        buf.position(MAGIC_LEGACY.length);
+        buf.get();
+        byte[] nonce = new byte[NONCE_LEN];
+        buf.get(nonce);
+        byte[] ct = new byte[buf.remaining()];
+        buf.get(ct);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"),
+                new GCMParameterSpec(TAG_BITS, nonce));
+        return cipher.doFinal(ct);
+    }
+
+    private static byte[] unpad(byte[] padded) {
+        if (padded.length < 2) {
+            return padded;
+        }
+        int n = ((padded[0] & 0xff) << 8) | (padded[1] & 0xff);
+        if (n < 0 || 2 + n > padded.length) {
+            return padded;
+        }
+        byte[] out = new byte[padded.length - 2 - n];
+        System.arraycopy(padded, 2 + n, out, 0, out.length);
+        return out;
+    }
+
+    private static byte[] stretch(byte[] master, byte[] salt, String info) throws Exception {
+        MessageDigest sha = MessageDigest.getInstance("SHA-256");
+        sha.update(master);
+        sha.update(salt);
+        sha.update(info.getBytes(StandardCharsets.UTF_8));
+        sha.update(pepper());
+        byte[] out = sha.digest();
+        for (int i = 1; i < ROUNDS; i++) {
+            sha.reset();
+            sha.update(out);
+            sha.update(salt);
+            sha.update((byte) (i >>> 24));
+            sha.update((byte) (i >>> 16));
+            sha.update((byte) (i >>> 8));
+            sha.update((byte) i);
+            out = sha.digest();
+        }
+        return out;
+    }
+
+    private static byte[] pepper() {
+        byte[] p = new byte[PEPPER.length];
+        for (int i = 0; i < PEPPER.length; i++) {
+            p[i] = (byte) PEPPER[i];
+        }
+        return p;
+    }
+
+    private static boolean startsWith(byte[] data, byte[] prefix) {
+        if (data.length < prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (data[i] != prefix[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int indexOf(byte[] data, byte[] needle) {
+        if (needle.length == 0 || data.length < needle.length) {
+            return -1;
+        }
+        outer:
+        for (int i = 0; i <= data.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (data[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return i;
+        }
+        return -1;
     }
 }

@@ -46,10 +46,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          NAME="AndLua-Protector-1.0.0.apk"
+          NAME="Axcel-Loki-1.1.0.apk"
           cp "$APK" "/tmp/${NAME}"
-          gh release delete "v1.0.0" -y 2>/dev/null || true
-          gh release create "v1.0.0" \
-            --title "AndLua Protector v1.0.0" \
-            --notes "Android app: pick an AndLua APK, AES-256-GCM wrap assets/*.lua (inner AndLua encryption kept), inject runtime decrypt gate, auto-sign. Built by GitHub Actions." \
+          gh release delete "v1.1.0" -y 2>/dev/null || true
+          gh release create "v1.1.0" \
+            --title "Axcel Loki v1.1.0" \
+            --notes "Premium UI, social links, stepped seal animation, save-to-sdcard prompt. Built by GitHub Actions." \
             "/tmp/${NAME}#${NAME}"

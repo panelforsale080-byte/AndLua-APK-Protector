@@ -1,10 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">AndLua Protector</string>
-    <string name="subtitle">Double-encrypt assets/*.lua with AES-256-GCM. Original AndLua layer stays inside. Auto-sign.</string>
-    <string name="pick">Select APK</string>
-    <string name="protect">Protect</string>
-    <string name="save">Save</string>
-    <string name="idle">Select an AndLua APK to protect.</string>
-    <string name="help">1. Select APK\n2. Protect (only assets/*.lua)\n3. Save signed APK\n\nInner format stays AndLua =IA. Outer layer is ALP2 AES-256-GCM. Runtime gate decrypts on launch so the app still runs.</string>
+    <string name="app_name">Axcel Loki</string>
+    <string name="tagline">Premium package shield</string>
+    <string name="pick">Select</string>
+    <string name="protect">Seal</string>
+    <string name="idle">Choose a package to begin.</string>
+    <string name="help">Welcome.\nSelect a package, then seal it.\nWhen it is ready, you can keep a copy.</string>
+    <string name="telegram">Telegram</string>
+    <string name="youtube">YouTube</string>
+    <string name="need_pick">Select a package first</string>
+    <string name="working">Working…</string>
+    <string name="finishing">Almost there…</string>
+    <string name="ready">Complete.</string>
+    <string name="failed">Could not finish.</string>
+    <string name="selected">Package ready.</string>
+    <string name="ready_hint">Ready. Tap Seal.</string>
+    <string name="save_title">Save this file?</string>
+    <string name="save_message">Keep the sealed package on sdcard/ ?</string>
+    <string name="save_yes">Save</string>
+    <string name="save_no">Not now</string>
+    <string name="need_storage">Allow storage access to save.</string>
+    <string name="saved">Saved to %1$s</string>
+    <string name="save_fail">Could not save.</string>
+    <string-array name="seal_steps">
+        <item>Opening the vault</item>
+        <item>Reading the package</item>
+        <item>Spinning the lock</item>
+        <item>Weaving the seal</item>
+        <item>Pressing the mark</item>
+        <item>Polishing the build</item>
+    </string-array>
 </resources>
