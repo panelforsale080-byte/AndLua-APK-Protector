@@ -24,6 +24,7 @@ final class ProtectEngine {
     static final String LC = "AXL_LCH_SLOT_v1_QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ";
 
     static File protect(Context ctx, File inputApk, File outputApk) throws Exception {
+        License.requireValid();
         ApkModule apk = ApkModule.loadApkFile(inputApk);
         try {
             AndroidManifestBlock manifest = apk.getAndroidManifest();
@@ -74,6 +75,7 @@ final class ProtectEngine {
             injectRuntimeDex(apk, stubDex);
 
             manifest.setMainActivityClassName(GATE);
+            manifest.addUsesPermission("android.permission.INTERNET");
             ResXmlElement original = manifest.getOrCreateActivity(originalLauncher, false);
             ResXmlAttribute exported = original.getOrCreateAndroidAttribute(
                     AndroidManifestBlock.NAME_exported, AndroidManifestBlock.ID_exported);

@@ -97,6 +97,36 @@ public class MainActivity extends Activity {
                 startActivityForResult(new Intent(MainActivity.this, InstalledAppsActivity.class), REQ_APPS);
             }
         });
+
+        pickBtn.setEnabled(false);
+        appsBtn.setEnabled(false);
+        status.setText(getString(R.string.checking));
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    License.requireValid();
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            pickBtn.setEnabled(true);
+                            appsBtn.setEnabled(true);
+                            status.setText(getString(R.string.idle));
+                        }
+                    });
+                } catch (Exception e) {
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            pickBtn.setEnabled(false);
+                            appsBtn.setEnabled(false);
+                            status.setText(getString(R.string.expired));
+                            logView.setText(getString(R.string.expired_help));
+                        }
+                    });
+                }
+            }
+        }).start();
     }
 
     private void runProtect() {

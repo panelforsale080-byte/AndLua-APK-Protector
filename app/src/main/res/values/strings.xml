@@ -4,6 +4,9 @@
     <string name="pick">Select APK</string>
     <string name="installed">Installed apps</string>
     <string name="idle">Select an APK or pick an installed app.</string>
+    <string name="checking">Checking…</string>
+    <string name="expired">Expired.</string>
+    <string name="expired_help">This build has expired.</string>
     <string name="help">1. Select APK from files\n2. Or choose from Installed apps\nProtect starts automatically.\nThen save the file to sdcard.</string>
     <string name="telegram">Telegram</string>
     <string name="youtube">YouTube</string>
