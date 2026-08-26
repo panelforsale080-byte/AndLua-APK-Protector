@@ -1,0 +1,11 @@
+.gradle/
+build/
+**/build/
+.idea/
+*.iml
+local.properties
+.DS_Store
+captures/
+*.apk
+!gradle/wrapper/gradle-wrapper.jar
+app/src/main/assets/alpprotect-runtime.dex

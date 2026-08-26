@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AndLua Protector</string>
+    <string name="subtitle">Double-encrypt assets/*.lua with AES-256-GCM. Original AndLua layer stays inside. Auto-sign.</string>
+    <string name="pick">Select APK</string>
+    <string name="protect">Protect</string>
+    <string name="save">Save</string>
+    <string name="idle">Select an AndLua APK to protect.</string>
+    <string name="help">1. Select APK\n2. Protect (only assets/*.lua)\n3. Save signed APK\n\nInner format stays AndLua =IA. Outer layer is ALP2 AES-256-GCM. Runtime gate decrypts on launch so the app still runs.</string>
+</resources>

@@ -1,0 +1,46 @@
+plugins {
+    id "com.android.library"
+}
+
+android {
+    namespace "com.alpprotect"
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+}
+
+afterEvaluate {
+    tasks.named("assembleRelease").configure {
+        doLast {
+            def matches = fileTree(layout.buildDirectory.asFile.get()).matching {
+                include "**/intermediates/dex/release/**/classes.dex"
+            }.files.findAll { it.isFile() && it.length() > 0 }
+            if (matches.isEmpty()) {
+                throw new GradleException("runtime-stub classes.dex not found under intermediates/dex/release")
+            }
+            def dex = matches.max { it.length() }
+            def destDir = file("${rootDir}/app/src/main/assets")
+            destDir.mkdirs()
+            copy {
+                from dex
+                into destDir
+                rename { "alpprotect-runtime.dex" }
+            }
+            println "Exported runtime stub dex: ${dex} -> ${destDir}/alpprotect-runtime.dex"
+        }
+    }
+}
