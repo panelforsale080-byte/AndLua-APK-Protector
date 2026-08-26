@@ -48,11 +48,11 @@ dependencies {
 }
 
 tasks.register("copyRuntimeDex") {
-    dependsOn ":runtime-stub:assembleRelease"
+    dependsOn ":runtime-stub:exportRuntimeDex"
     doLast {
         def dex = file("${rootDir}/app/src/main/assets/alpprotect-runtime.dex")
         if (!dex.exists() || dex.length() == 0) {
-            throw new GradleException("alpprotect-runtime.dex missing after runtime-stub assembleRelease")
+            throw new GradleException("alpprotect-runtime.dex missing after runtime-stub exportRuntimeDex")
         }
     }
 }
