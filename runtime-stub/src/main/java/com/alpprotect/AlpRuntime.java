@@ -3,7 +3,6 @@ package com.alpprotect;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -15,21 +14,18 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 final class AlpRuntime {
-    static final String KEY_ASSET = "alpprotect.key";
-    static final String LAUNCHER_ASSET = "alpprotect.launcher";
-    static final String MARKER = "alpprotect.ready";
+    static final String MARKER = "axl.ready";
 
     private AlpRuntime() {}
 
-    static String originalLauncher(Context ctx) throws Exception {
-        return new String(readAsset(ctx, LAUNCHER_ASSET), StandardCharsets.UTF_8).trim();
+    static String originalLauncher(Context ctx) {
+        return AlpCrypto.originalLauncher();
     }
 
     static void bootstrap(Context ctx) throws Exception {
         File marker = new File(ctx.getFilesDir(), MARKER);
         String pkg = ctx.getPackageName();
-        byte[] key = AlpCrypto.decodeKey(
-                new String(readAsset(ctx, KEY_ASSET), StandardCharsets.UTF_8).trim(), pkg);
+        byte[] key = AlpCrypto.recoverMaster(ctx);
 
         File luaMdDir = ctx.getDir("lua", Context.MODE_PRIVATE);
         File filesDir = ctx.getFilesDir();
@@ -76,7 +72,7 @@ final class AlpRuntime {
     private static File destFor(String name, File filesDir, File luaMdDir) {
         if (name.startsWith("assets/")) {
             String rel = name.substring("assets/".length());
-            if (rel.isEmpty() || KEY_ASSET.equals(rel) || LAUNCHER_ASSET.equals(rel)) {
+            if (rel.isEmpty()) {
                 return null;
             }
             return new File(filesDir, rel);
@@ -89,12 +85,6 @@ final class AlpRuntime {
             return new File(luaMdDir, rel);
         }
         return null;
-    }
-
-    private static byte[] readAsset(Context ctx, String name) throws Exception {
-        try (InputStream in = ctx.getAssets().open(name)) {
-            return readAll(in);
-        }
     }
 
     private static byte[] readAll(InputStream in) throws Exception {

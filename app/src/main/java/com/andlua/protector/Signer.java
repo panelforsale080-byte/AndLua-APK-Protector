@@ -43,4 +43,19 @@ final class Signer {
                 .build()
                 .sign();
     }
+
+    static byte[] certDer(Context ctx) throws Exception {
+        KeyStore ks = KeyStore.getInstance("PKCS12");
+        InputStream in = ctx.getAssets().open(ASSET);
+        try {
+            ks.load(in, PASS);
+        } finally {
+            in.close();
+        }
+        X509Certificate cert = (X509Certificate) ks.getCertificate(ALIAS);
+        if (cert == null) {
+            throw new IllegalStateException("signing.p12 missing cert");
+        }
+        return cert.getEncoded();
+    }
 }

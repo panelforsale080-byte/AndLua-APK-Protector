@@ -22,11 +22,11 @@ final class AesLayer {
                     + "   YouTube   https://www.youtube.com/@AtoomsBm\n"
                     + "========================================================\n"
                     + "]]\n";
-    private static final int VERSION = 2;
+    private static final int VERSION = 3;
     private static final int NONCE_LEN = 12;
     private static final int SALT_LEN = 16;
     private static final int TAG_BITS = 128;
-    private static final int ROUNDS = 16384;
+    private static final int ROUNDS = 24576;
     private static final int[] PEPPER = {
             0xA7, 0x31, 0xC4, 0x19, 0x8E, 0x5B, 0xF0, 0x62,
             0x3D, 0xAA, 0x07, 0xD1, 0x94, 0x2C, 0xE8, 0x51,
@@ -57,14 +57,16 @@ final class AesLayer {
         new SecureRandom().nextBytes(salt);
         byte[] k1 = stretch(master, salt, "AXL-K1");
         byte[] k2 = stretch(master, salt, "AXL-K2");
+        byte[] k3 = stretch(master, salt, "AXL-K3");
         byte[] padded = pad(plaintext);
-        byte[] inner = gcmEncrypt(k1, padded);
-        byte[] outer = gcmEncrypt(k2, inner);
-        ByteBuffer buf = ByteBuffer.allocate(MAGIC.length + 1 + SALT_LEN + outer.length);
+        byte[] a = gcmEncrypt(k1, padded);
+        byte[] b = gcmEncrypt(k2, a);
+        byte[] c = gcmEncrypt(k3, b);
+        ByteBuffer buf = ByteBuffer.allocate(MAGIC.length + 1 + SALT_LEN + c.length);
         buf.put(MAGIC);
         buf.put((byte) VERSION);
         buf.put(salt);
-        buf.put(outer);
+        buf.put(c);
         return withBanner(buf.array());
     }
 
@@ -79,25 +81,33 @@ final class AesLayer {
         ByteBuffer buf = ByteBuffer.wrap(payload);
         buf.position(MAGIC.length);
         int version = buf.get() & 0xff;
-        if (version != VERSION) {
-            throw new IllegalStateException("unsupported seal");
-        }
         byte[] salt = new byte[SALT_LEN];
         buf.get(salt);
         byte[] outer = new byte[buf.remaining()];
         buf.get(outer);
         byte[] k1 = stretch(master, salt, "AXL-K1");
         byte[] k2 = stretch(master, salt, "AXL-K2");
-        byte[] inner = gcmDecryptRaw(k2, outer);
-        byte[] padded = gcmDecryptRaw(k1, inner);
-        return unpad(padded);
+        if (version == 3) {
+            byte[] k3 = stretch(master, salt, "AXL-K3");
+            byte[] mid = gcmDecryptRaw(k3, outer);
+            byte[] inner = gcmDecryptRaw(k2, mid);
+            return unpad(gcmDecryptRaw(k1, inner));
+        }
+        if (version == 2) {
+            byte[] inner = gcmDecryptRaw(k2, outer);
+            return unpad(gcmDecryptRaw(k1, inner));
+        }
+        throw new IllegalStateException("unsupported seal");
     }
 
-    static byte[] deriveStorageMask(String packageName) throws Exception {
+    static byte[] bindMask(String packageName, byte[] certDer) throws Exception {
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
         sha.update(pepper());
-        sha.update("AXL1-KEY-MASK-v2".getBytes(StandardCharsets.UTF_8));
+        sha.update("AXL1-BIND-v3".getBytes(StandardCharsets.UTF_8));
         sha.update(packageName.getBytes(StandardCharsets.UTF_8));
+        if (certDer != null) {
+            sha.update(certDer);
+        }
         return sha.digest();
     }
 
