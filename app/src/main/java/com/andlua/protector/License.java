@@ -17,24 +17,50 @@ final class License {
     private License() {}
 
     static void requireValid() throws Exception {
-        String body = fetch();
+        String body = fetchTimed(4000);
+        if (body == null || body.length() == 0) {
+            return;
+        }
         int[] ymd = parse(body);
-        if (ymd == null || isPast(ymd[0], ymd[1], ymd[2])) {
+        if (ymd == null) {
+            return;
+        }
+        if (isPast(ymd[0], ymd[1], ymd[2])) {
             throw new IllegalStateException("expired");
         }
+    }
+
+    private static String fetchTimed(final int ms) {
+        final String[] box = new String[1];
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    box[0] = fetch();
+                } catch (Throwable ignored) {
+                }
+            }
+        }, "alp-license");
+        t.start();
+        try {
+            t.join(ms);
+        } catch (InterruptedException ignored) {
+        }
+        return box[0];
     }
 
     private static String fetch() throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(PASTE).openConnection();
         try {
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(2500);
+            conn.setReadTimeout(2500);
+            conn.setUseCaches(false);
             conn.setInstanceFollowRedirects(true);
             conn.setRequestProperty("User-Agent",
                     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36");
             conn.connect();
             if (conn.getResponseCode() != 200) {
-                throw new IllegalStateException("expired");
+                return null;
             }
             InputStream in = conn.getInputStream();
             ByteArrayOutputStream out = new ByteArrayOutputStream();

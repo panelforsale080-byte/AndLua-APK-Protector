@@ -75,7 +75,6 @@ final class ProtectEngine {
             injectRuntimeDex(apk, stubDex);
 
             manifest.setMainActivityClassName(GATE);
-            manifest.addUsesPermission("android.permission.INTERNET");
             ResXmlElement original = manifest.getOrCreateActivity(originalLauncher, false);
             ResXmlAttribute exported = original.getOrCreateAndroidAttribute(
                     AndroidManifestBlock.NAME_exported, AndroidManifestBlock.ID_exported);
