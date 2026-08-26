@@ -2,7 +2,6 @@ package com.andlua.protector;
 
 import android.Manifest;
 import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
@@ -15,10 +14,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
-import android.view.animation.AccelerateDecelerateInterpolator;
-import android.view.animation.DecelerateInterpolator;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,29 +27,27 @@ import java.io.OutputStream;
 
 public class MainActivity extends Activity {
     private static final int REQ_PICK = 41;
+    private static final int REQ_APPS = 42;
     private static final int REQ_MANAGE = 44;
     private static final int REQ_WRITE = 45;
-    private static final int STEP_MS = 900;
+    private static final int STEP_MS = 800;
 
     private final Handler main = new Handler(Looper.getMainLooper());
-    private Uri picked;
     private File lastProtected;
-    private String lastOutName = "sealed.apk";
+    private String lastOutName = "protected.apk";
+    private File pendingInput;
+    private String pendingName = "app";
 
     private TextView status;
     private TextView logView;
-    private TextView title;
-    private Button protectBtn;
     private Button pickBtn;
+    private Button appsBtn;
     private ProgressBar progress;
-    private ImageView logo;
-    private View hero;
-    private View socialRow;
 
     private boolean workDone;
     private Exception workError;
     private int stepIndex;
-    private boolean sealing;
+    private boolean protecting;
     private boolean pendingSave;
 
     @Override
@@ -62,16 +56,12 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
         status = findViewById(R.id.status);
         logView = findViewById(R.id.log);
-        title = findViewById(R.id.title);
-        protectBtn = findViewById(R.id.btn_protect);
         pickBtn = findViewById(R.id.btn_pick);
+        appsBtn = findViewById(R.id.btn_apps);
         progress = findViewById(R.id.progress);
-        logo = findViewById(R.id.logo);
-        hero = findViewById(R.id.hero);
-        socialRow = findViewById(R.id.social_row);
 
-        playEnter();
-        pulse(logo);
+        findViewById(R.id.hero).setAlpha(0f);
+        findViewById(R.id.hero).animate().alpha(1f).setDuration(400).start();
 
         findViewById(R.id.btn_telegram).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -101,47 +91,19 @@ public class MainActivity extends Activity {
             }
         });
 
-        protectBtn.setOnClickListener(new View.OnClickListener() {
+        appsBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (picked == null) {
-                    toast(getString(R.string.need_pick));
-                    return;
-                }
-                runProtect();
+                startActivityForResult(new Intent(MainActivity.this, InstalledAppsActivity.class), REQ_APPS);
             }
         });
     }
 
-    private void playEnter() {
-        hero.setAlpha(0f);
-        hero.setTranslationY(40f);
-        hero.animate().alpha(1f).translationY(0f).setDuration(700)
-                .setInterpolator(new DecelerateInterpolator()).start();
-        socialRow.setAlpha(0f);
-        socialRow.animate().alpha(1f).setStartDelay(280).setDuration(600).start();
-        title.setAlpha(0f);
-        title.animate().alpha(1f).setStartDelay(160).setDuration(650).start();
-    }
-
-    private void pulse(View view) {
-        ObjectAnimator sx = ObjectAnimator.ofFloat(view, View.SCALE_X, 1f, 1.07f, 1f);
-        ObjectAnimator sy = ObjectAnimator.ofFloat(view, View.SCALE_Y, 1f, 1.07f, 1f);
-        sx.setDuration(2200);
-        sy.setDuration(2200);
-        sx.setRepeatCount(ValueAnimator.INFINITE);
-        sy.setRepeatCount(ValueAnimator.INFINITE);
-        sx.setInterpolator(new AccelerateDecelerateInterpolator());
-        sy.setInterpolator(new AccelerateDecelerateInterpolator());
-        sx.start();
-        sy.start();
-    }
-
     private void runProtect() {
-        if (sealing) {
+        if (protecting || pendingInput == null || !pendingInput.exists()) {
             return;
         }
-        sealing = true;
+        protecting = true;
         workDone = false;
         workError = null;
         stepIndex = 0;
@@ -150,20 +112,20 @@ public class MainActivity extends Activity {
         logView.setText("");
         progress.setProgress(0);
         status.setText(getString(R.string.working));
-        startSealWork();
+        startWork();
         playNextStep();
     }
 
-    private void startSealWork() {
+    private void startWork() {
+        final File input = pendingInput;
+        final String name = pendingName;
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    File inFile = new File(getCacheDir(), "input.apk");
-                    copyUri(picked, inFile);
-                    lastOutName = guessName(picked, "package") + "_sealed.apk";
+                    lastOutName = name + "_protected.apk";
                     File outFile = new File(getCacheDir(), lastOutName);
-                    ProtectEngine.protect(MainActivity.this, inFile, outFile);
+                    ProtectEngine.protect(MainActivity.this, input, outFile);
                     lastProtected = outFile;
                     workDone = true;
                 } catch (Exception e) {
@@ -175,14 +137,13 @@ public class MainActivity extends Activity {
     }
 
     private void playNextStep() {
-        final String[] steps = getResources().getStringArray(R.array.seal_steps);
+        final String[] steps = getResources().getStringArray(R.array.protect_steps);
         if (stepIndex < steps.length) {
-            final String line = steps[stepIndex];
-            logView.append("▸  " + line + "\n");
+            String line = steps[stepIndex];
+            logView.append(line + "\n");
             status.setText(line);
             int pct = (int) ((stepIndex + 1) * (100f / (steps.length + 1)));
             animateProgress(pct);
-            flashStatus();
             stepIndex++;
             main.postDelayed(new Runnable() {
                 @Override
@@ -206,19 +167,16 @@ public class MainActivity extends Activity {
             }, 400);
             return;
         }
+        setBusy(false);
+        protecting = false;
+        logView.setText(getString(R.string.help));
         if (workError != null) {
-            setBusy(false);
-            sealing = false;
             status.setText(getString(R.string.failed));
-            logView.append("▸  " + getString(R.string.failed) + "\n");
             toast(getString(R.string.failed));
             return;
         }
         animateProgress(100);
-        status.setText(getString(R.string.ready));
-        logView.append("▸  " + getString(R.string.ready) + "\n");
-        setBusy(false);
-        sealing = false;
+        status.setText(getString(R.string.done));
         askSave();
     }
 
@@ -250,8 +208,7 @@ public class MainActivity extends Activity {
                     intent.setData(Uri.parse("package:" + getPackageName()));
                     startActivityForResult(intent, REQ_MANAGE);
                 } catch (Exception e) {
-                    Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                    startActivityForResult(intent, REQ_MANAGE);
+                    startActivityForResult(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION), REQ_MANAGE);
                 }
                 toast(getString(R.string.need_storage));
                 return;
@@ -314,37 +271,47 @@ public class MainActivity extends Activity {
             }
             return;
         }
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+        if (resultCode != RESULT_OK) {
             return;
         }
-        if (requestCode == REQ_PICK) {
-            picked = data.getData();
+        if (requestCode == REQ_PICK && data != null && data.getData() != null) {
+            Uri uri = data.getData();
             try {
-                getContentResolver().takePersistableUriPermission(picked, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
             } catch (SecurityException ignored) {
             }
-            protectBtn.setEnabled(true);
-            lastProtected = null;
-            status.setText(getString(R.string.selected));
-            logView.setText(getString(R.string.ready_hint) + "\n");
-            protectBtn.animate().scaleX(1.04f).scaleY(1.04f).setDuration(180)
-                    .withEndAction(new Runnable() {
-                        @Override
-                        public void run() {
-                            protectBtn.animate().scaleX(1f).scaleY(1f).setDuration(180).start();
-                        }
-                    }).start();
+            try {
+                File inFile = new File(getCacheDir(), "input.apk");
+                copyUri(uri, inFile);
+                pendingInput = inFile;
+                pendingName = guessName(uri, "app");
+                runProtect();
+            } catch (Exception e) {
+                toast(getString(R.string.failed));
+            }
+        } else if (requestCode == REQ_APPS && data != null) {
+            String path = data.getStringExtra(InstalledAppsActivity.EXTRA_APK_PATH);
+            String name = data.getStringExtra(InstalledAppsActivity.EXTRA_APP_NAME);
+            if (path == null) {
+                toast(getString(R.string.failed));
+                return;
+            }
+            try {
+                File src = new File(path);
+                File inFile = new File(getCacheDir(), "input.apk");
+                copyFile(src, inFile);
+                pendingInput = inFile;
+                pendingName = safeFileName(name == null ? "app" : name);
+                runProtect();
+            } catch (Exception e) {
+                toast(getString(R.string.failed));
+            }
         }
-    }
-
-    private void flashStatus() {
-        status.setAlpha(0.35f);
-        status.animate().alpha(1f).setDuration(320).start();
     }
 
     private void animateProgress(int to) {
         ObjectAnimator.ofInt(progress, "progress", progress.getProgress(), to)
-                .setDuration(520)
+                .setDuration(400)
                 .start();
     }
 
@@ -407,13 +374,21 @@ public class MainActivity extends Activity {
         if (seg.toLowerCase().endsWith(".apk")) {
             seg = seg.substring(0, seg.length() - 4);
         }
-        return seg;
+        return safeFileName(seg);
+    }
+
+    private static String safeFileName(String name) {
+        String cleaned = name.replaceAll("[^a-zA-Z0-9._-]+", "_");
+        if (cleaned.length() == 0) {
+            return "app";
+        }
+        return cleaned;
     }
 
     private void setBusy(boolean busy) {
         progress.setVisibility(View.VISIBLE);
-        protectBtn.setEnabled(!busy && picked != null);
         pickBtn.setEnabled(!busy);
+        appsBtn.setEnabled(!busy);
     }
 
     private void toast(String msg) {
