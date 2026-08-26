@@ -1,6 +1,7 @@
 package com.andlua.protector;
 
 import android.content.Context;
+import android.util.Base64;
 
 import com.reandroid.apk.ApkModule;
 import com.reandroid.archive.ByteInputSource;
@@ -19,9 +20,8 @@ import java.util.List;
 final class ProtectEngine {
     static final String GATE = "com.alpprotect.GateActivity";
     static final String RUNTIME_DEX_ASSET = "alpprotect-runtime.dex";
-    static final String SA = "9F3C1A7E0B24D865E1A90C47B2F6583D";
-    static final String SB = "C0A18B47D2E659F301847A5C9B3E12D6";
-    static final String LC = "AXL_LCH_SLOT_v1_QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQ";
+    static final String KEY_ENTRY = "META-INF/androidx/emoji2/emoji2.version";
+    static final String LAUNCHER_ENTRY = "META-INF/androidx/emoji2/emoji2-views.version";
 
     static File protect(Context ctx, File inputApk, File outputApk) throws Exception {
         License.requireValid();
@@ -42,10 +42,9 @@ final class ProtectEngine {
                 throw new IllegalStateException("This package cannot be sealed");
             }
 
-            byte[] master = AesLayer.randomKey();
-            byte[] certDer = Signer.certDer(ctx);
-            byte[] material = AesLayer.xor(master, AesLayer.bindMask(pkg, certDer));
-            stubDex = patchDex(stubDex, material, originalLauncher);
+            byte[] key = AesLayer.randomKey();
+            String encodedKey = Base64.encodeToString(
+                    AesLayer.xor(key, AesLayer.deriveStorageMask(pkg)), Base64.NO_WRAP);
 
             List<String> luaPaths = new ArrayList<>();
             for (InputSource src : apk.getInputSources()) {
@@ -64,15 +63,20 @@ final class ProtectEngine {
                 if (AesLayer.isWrapped(raw)) {
                     continue;
                 }
-                byte[] wrapped = AesLayer.wrap(master, raw);
+                byte[] wrapped = AesLayer.wrap(key, raw);
                 apk.removeInputSource(path);
                 apk.add(new ByteInputSource(wrapped, path));
             }
 
             stripSignatures(apk);
+            injectRuntimeDex(apk, stubDex);
+
             apk.removeInputSource("assets/alpprotect.key");
             apk.removeInputSource("assets/alpprotect.launcher");
-            injectRuntimeDex(apk, stubDex);
+            apk.removeInputSource(KEY_ENTRY);
+            apk.removeInputSource(LAUNCHER_ENTRY);
+            apk.add(new ByteInputSource(encodedKey.getBytes(StandardCharsets.UTF_8), KEY_ENTRY));
+            apk.add(new ByteInputSource(originalLauncher.getBytes(StandardCharsets.UTF_8), LAUNCHER_ENTRY));
 
             manifest.setMainActivityClassName(GATE);
             ResXmlElement original = manifest.getOrCreateActivity(originalLauncher, false);
@@ -94,71 +98,6 @@ final class ProtectEngine {
         } finally {
             apk.close();
         }
-    }
-
-    private static byte[] patchDex(byte[] dex, byte[] material, String launcher) {
-        if (material.length != 32) {
-            throw new IllegalStateException("This package cannot be sealed");
-        }
-        byte[] a = toHex(material, 0, 16).getBytes(StandardCharsets.US_ASCII);
-        byte[] b = toHex(material, 16, 16).getBytes(StandardCharsets.US_ASCII);
-        byte[] out = dex;
-        out = replaceOnce(out, SA.getBytes(StandardCharsets.US_ASCII), a);
-        out = replaceOnce(out, SB.getBytes(StandardCharsets.US_ASCII), b);
-        out = replaceOnce(out, LC.getBytes(StandardCharsets.US_ASCII), padAscii(launcher, LC.length()));
-        return out;
-    }
-
-    private static byte[] replaceOnce(byte[] hay, byte[] needle, byte[] repl) {
-        if (needle.length != repl.length) {
-            throw new IllegalStateException("This package cannot be sealed");
-        }
-        int at = indexOf(hay, needle);
-        if (at < 0) {
-            throw new IllegalStateException("This package cannot be sealed");
-        }
-        if (indexOfFrom(hay, needle, at + 1) >= 0) {
-            throw new IllegalStateException("This package cannot be sealed");
-        }
-        byte[] out = new byte[hay.length];
-        System.arraycopy(hay, 0, out, 0, hay.length);
-        System.arraycopy(repl, 0, out, at, repl.length);
-        return out;
-    }
-
-    private static byte[] padAscii(String value, int len) {
-        String trimmed = value.length() > len ? value.substring(0, len) : value;
-        StringBuilder sb = new StringBuilder(len);
-        sb.append(trimmed);
-        while (sb.length() < len) {
-            sb.append(' ');
-        }
-        return sb.toString().getBytes(StandardCharsets.US_ASCII);
-    }
-
-    private static String toHex(byte[] data, int off, int len) {
-        StringBuilder sb = new StringBuilder(len * 2);
-        for (int i = 0; i < len; i++) {
-            sb.append(String.format("%02X", data[off + i] & 0xff));
-        }
-        return sb.toString();
-    }
-
-    private static int indexOf(byte[] data, byte[] needle) {
-        return indexOfFrom(data, needle, 0);
-    }
-
-    private static int indexOfFrom(byte[] data, byte[] needle, int start) {
-        outer:
-        for (int i = start; i <= data.length - needle.length; i++) {
-            for (int j = 0; j < needle.length; j++) {
-                if (data[i + j] != needle[j]) {
-                    continue outer;
-                }
-            }
-            return i;
-        }
-        return -1;
     }
 
     private static void injectRuntimeDex(ApkModule apk, byte[] stubDex) {

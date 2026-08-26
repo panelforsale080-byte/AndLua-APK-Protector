@@ -46,10 +46,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          NAME="AndLua-Protector-1.4.1.apk"
+          NAME="AndLua-Protector-1.5.0.apk"
           cp "$APK" "/tmp/${NAME}"
-          gh release delete "v1.4.1" -y 2>/dev/null || true
-          gh release create "v1.4.1" \
-            --title "AndLua Protector v1.4.1" \
-            --notes "Expiry date is only on the Protector app (pastebin YYYY/MM/DD). Sealed apps open like before." \
+          gh release delete "v1.5.0" -y 2>/dev/null || true
+          gh release create "v1.5.0" \
+            --title "AndLua Protector v1.5.0" \
+            --notes "Working seal restored. alpprotect.key and alpprotect.launcher are not in assets. Protector expiry still uses pastebin (YYYY/MM/DD)." \
             "/tmp/${NAME}#${NAME}"

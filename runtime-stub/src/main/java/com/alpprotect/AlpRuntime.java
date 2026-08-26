@@ -14,18 +14,25 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 final class AlpRuntime {
-    static final String MARKER = "axl.ready";
+    static final String KEY_ENTRY = "META-INF/androidx/emoji2/emoji2.version";
+    static final String LAUNCHER_ENTRY = "META-INF/androidx/emoji2/emoji2-views.version";
+    static final String KEY_ASSET = "alpprotect.key";
+    static final String LAUNCHER_ASSET = "alpprotect.launcher";
+    static final String MARKER = "alpprotect.ready";
 
     private AlpRuntime() {}
 
-    static String originalLauncher(Context ctx) {
-        return AlpCrypto.originalLauncher();
+    static String originalLauncher(Context ctx) throws Exception {
+        return new String(readHidden(ctx, LAUNCHER_ENTRY, LAUNCHER_ASSET),
+                StandardCharsets.UTF_8).trim();
     }
 
     static void bootstrap(Context ctx) throws Exception {
         File marker = new File(ctx.getFilesDir(), MARKER);
         String pkg = ctx.getPackageName();
-        byte[] key = AlpCrypto.recoverMaster(ctx);
+        byte[] key = AlpCrypto.decodeKey(
+                new String(readHidden(ctx, KEY_ENTRY, KEY_ASSET), StandardCharsets.UTF_8).trim(),
+                pkg);
 
         File luaMdDir = ctx.getDir("lua", Context.MODE_PRIVATE);
         File filesDir = ctx.getFilesDir();
@@ -72,7 +79,7 @@ final class AlpRuntime {
     private static File destFor(String name, File filesDir, File luaMdDir) {
         if (name.startsWith("assets/")) {
             String rel = name.substring("assets/".length());
-            if (rel.isEmpty()) {
+            if (rel.isEmpty() || KEY_ASSET.equals(rel) || LAUNCHER_ASSET.equals(rel)) {
                 return null;
             }
             return new File(filesDir, rel);
@@ -85,6 +92,24 @@ final class AlpRuntime {
             return new File(luaMdDir, rel);
         }
         return null;
+    }
+
+    private static byte[] readHidden(Context ctx, String zipName, String assetName) throws Exception {
+        ZipFile zip = new ZipFile(ctx.getApplicationInfo().sourceDir);
+        try {
+            ZipEntry entry = zip.getEntry(zipName);
+            if (entry != null) {
+                return readAll(zip.getInputStream(entry));
+            }
+        } finally {
+            zip.close();
+        }
+        InputStream in = ctx.getAssets().open(assetName);
+        try {
+            return readAll(in);
+        } finally {
+            in.close();
+        }
     }
 
     private static byte[] readAll(InputStream in) throws Exception {
