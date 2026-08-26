@@ -97,6 +97,9 @@ tasks.register("exportRuntimeDex") {
     }
 }
 
-tasks.named("assembleRelease").configure {
-    dependsOn "exportRuntimeDex"
+afterEvaluate {
+    def assemble = tasks.findByName("assembleRelease")
+    if (assemble != null) {
+        assemble.dependsOn("exportRuntimeDex")
+    }
 }
