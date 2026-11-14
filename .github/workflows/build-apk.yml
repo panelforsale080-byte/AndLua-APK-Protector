@@ -48,10 +48,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          NAME="Xorel-2.5.0.apk"
+          NAME="Xorel-2.6.0.apk"
           cp "$APK" "/tmp/${NAME}"
-          gh release delete "v2.5.0" -y 2>/dev/null || true
-          gh release create "v2.5.0" \
-            --title "Xorel v2.5.0" \
-            --notes "The current AndluaKey date opens the app. A different date still has to be signed." \
+          gh release delete "v2.6.0" -y 2>/dev/null || true
+          gh release create "v2.6.0" \
+            --title "Xorel v2.6.0" \
+            --notes "Translucent gray panels and the Monocraft pixel font." \
             "/tmp/${NAME}#${NAME}"

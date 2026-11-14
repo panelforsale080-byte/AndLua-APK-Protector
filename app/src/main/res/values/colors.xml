@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0F0F0F</color>
-    <color name="bg2">#141414</color>
-    <color name="text">#E6E6E6</color>
-    <color name="muted">#8A8A8A</color>
-    <color name="gold">#4C8BF5</color>
-    <color name="gold_soft">#8AB4F8</color>
-    <color name="card">#1A1A1A</color>
-    <color name="btn">#242424</color>
-    <color name="accent">#4C8BF5</color>
-    <color name="line">#333333</color>
-    <color name="header">#1F1F1F</color>
+    <color name="bg">#FF171717</color>
+    <color name="bg2">#8C323232</color>
+    <color name="text">#FFF4F4F4</color>
+    <color name="muted">#D6D4D4D4</color>
+    <color name="ink">#FF171717</color>
+    <color name="gold">#D9E4E4E4</color>
+    <color name="gold_soft">#99FFFFFF</color>
+    <color name="card">#73303030</color>
+    <color name="btn">#80444444</color>
+    <color name="accent">#E6E8E8E8</color>
+    <color name="line">#66FFFFFF</color>
+    <color name="header">#A6383838</color>
 </resources>

@@ -29,6 +29,7 @@ public class InstalledAppsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_apps);
+        Pixel.paint(this);
         ListView list = findViewById(R.id.app_list);
         final List<AppRow> rows = loadApps();
         if (rows.isEmpty()) {
@@ -115,6 +116,7 @@ public class InstalledAppsActivity extends Activity {
         public View getView(int position, View convertView, ViewGroup parent) {
             if (convertView == null) {
                 convertView = getLayoutInflater().inflate(R.layout.item_app, parent, false);
+                Pixel.paint(convertView);
             }
             AppRow row = rows.get(position);
             ImageView icon = convertView.findViewById(R.id.app_icon);

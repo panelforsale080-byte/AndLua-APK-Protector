@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Pixel.paint(this);
         status = findViewById(R.id.status);
         logView = findViewById(R.id.log);
         pickBtn = findViewById(R.id.btn_pick);
@@ -211,7 +212,7 @@ public class MainActivity extends Activity {
     }
 
     private void askSave() {
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.save_title)
                 .setMessage(R.string.save_message)
                 .setCancelable(true)
@@ -223,6 +224,9 @@ public class MainActivity extends Activity {
                 })
                 .setNegativeButton(R.string.save_no, null)
                 .show();
+        if (dialog.getWindow() != null) {
+            Pixel.paint(dialog.getWindow().getDecorView());
+        }
     }
 
     private void saveToSdcard() {
