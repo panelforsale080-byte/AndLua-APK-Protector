@@ -48,10 +48,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          NAME="Xorel-2.1.0.apk"
+          NAME="Xorel-2.2.0.apk"
           cp "$APK" "/tmp/${NAME}"
-          gh release delete "v2.1.0" -y 2>/dev/null || true
-          gh release create "v2.1.0" \
-            --title "Xorel v2.1.0" \
-            --notes "HKDF-SHA256 key derivation, AES-GCM wrapped master key, backup and debuggable turned off on the sealed app." \
+          gh release delete "v2.2.0" -y 2>/dev/null || true
+          gh release create "v2.2.0" \
+            --title "Xorel v2.2.0" \
+            --notes "Expiry is read from AndluaKey. No network, an unreadable date, or a past date all block the app." \
             "/tmp/${NAME}#${NAME}"

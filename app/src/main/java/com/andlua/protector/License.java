@@ -10,7 +10,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class License {
-    static final String PASTE = "https://pastebin.com/raw/k4ZPLGUj";
+    static final String PASTE =
+            "https://raw.githubusercontent.com/Axcelpogi190/PasswordAndLicense/main/AndluaKey";
     private static final Pattern DATE =
             Pattern.compile("(\\d{4})[/.-](\\d{1,2})[/.-](\\d{1,2})");
 
@@ -19,13 +20,10 @@ final class License {
     static void requireValid() throws Exception {
         String body = fetchTimed(4000);
         if (body == null || body.length() == 0) {
-            return;
+            throw new IllegalStateException("expired");
         }
         int[] ymd = parse(body);
-        if (ymd == null) {
-            return;
-        }
-        if (isPast(ymd[0], ymd[1], ymd[2])) {
+        if (ymd == null || isPast(ymd[0], ymd[1], ymd[2])) {
             throw new IllegalStateException("expired");
         }
     }
