@@ -1,41 +1,96 @@
 package com.andlua.protector;
 
+import android.util.Base64;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.NoRouteToHostException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Calendar;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class License {
+    static final String OFFLINE = "offline";
+    static final String EXPIRED = "expired";
     static final String PASTE =
             "https://raw.githubusercontent.com/Axcelpogi190/PasswordAndLicense/main/AndluaKey";
+    /** SubjectPublicKeyInfo for the AndluaKey signer. The private key is not in this app. */
+    private static final String PUBLIC_KEY =
+            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6Sop895ZLE9EXQkJXFl6a8ZFNbpzGJfuMxXteBY0L5OAVRbBpdCQm5W+an4doyJmxQ6VWxTi4afMdG6wR0FDVAtP+HrlKd8Si/rfYA7qQm3JZDYWA/7Ryy4nGaawztxcwMIdQxwTkC2P73y6UGsPr9j4neaMAI8rLCNUOfS/bnVYh/VBrNMap2hoFH7LYNgig9ZXqFwvXXi3OsLk9EYjr7Cb/Y+nScxQ+bHjOpLvJI2OwS9OEetIeZx0kB0huBBtKo2tQKPLO0OvINrBAv57qcfpmlzvx8XQzAgEQobZwbFKHv+di1B7pI83jboQRxwkWVSOfQ1T2aBzXI6npC4IxQIDAQAB";
     private static final Pattern DATE =
             Pattern.compile("(\\d{4})[/.-](\\d{1,2})[/.-](\\d{1,2})");
 
     private License() {}
 
     static void requireValid() throws Exception {
-        String body = fetchTimed(4000);
-        if (body == null || body.length() == 0) {
-            throw new IllegalStateException("expired");
+        Fetch fetched = fetchTimed(6000);
+        if (fetched.offline) {
+            throw new IllegalStateException(OFFLINE);
         }
-        int[] ymd = parse(body);
+        if (fetched.body == null || fetched.body.length() == 0) {
+            throw new IllegalStateException(EXPIRED);
+        }
+        String dateLine = null;
+        String sigLine = null;
+        String[] lines = fetched.body.split("\\r?\\n");
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.length() == 0) {
+                continue;
+            }
+            if (DATE.matcher(trimmed).matches()) {
+                dateLine = trimmed;
+            } else {
+                sigLine = trimmed;
+            }
+        }
+        if (dateLine == null || sigLine == null || !verify(dateLine, sigLine)) {
+            throw new IllegalStateException(EXPIRED);
+        }
+        int[] ymd = parse(dateLine);
         if (ymd == null || isPast(ymd[0], ymd[1], ymd[2])) {
-            throw new IllegalStateException("expired");
+            throw new IllegalStateException(EXPIRED);
         }
     }
 
-    private static String fetchTimed(final int ms) {
-        final String[] box = new String[1];
+    private static boolean verify(String dateLine, String sigLine) {
+        try {
+            byte[] pub = Base64.decode(PUBLIC_KEY, Base64.DEFAULT);
+            PublicKey key = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pub));
+            Signature sig = Signature.getInstance("SHA256withRSA");
+            sig.initVerify(key);
+            sig.update(dateLine.getBytes(StandardCharsets.UTF_8));
+            return sig.verify(Base64.decode(sigLine, Base64.DEFAULT));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static final class Fetch {
+        String body;
+        boolean offline;
+    }
+
+    private static Fetch fetchTimed(final int ms) {
+        final Fetch fetched = new Fetch();
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    box[0] = fetch();
-                } catch (Throwable ignored) {
+                    fetched.body = fetch();
+                } catch (Throwable e) {
+                    fetched.offline = isOffline(e);
                 }
             }
         }, "alp-license");
@@ -43,15 +98,34 @@ final class License {
         try {
             t.join(ms);
         } catch (InterruptedException ignored) {
+            fetched.offline = true;
         }
-        return box[0];
+        if (t.isAlive()) {
+            fetched.offline = true;
+            t.interrupt();
+        }
+        return fetched;
+    }
+
+    private static boolean isOffline(Throwable e) {
+        while (e != null) {
+            if (e instanceof UnknownHostException
+                    || e instanceof SocketTimeoutException
+                    || e instanceof ConnectException
+                    || e instanceof NoRouteToHostException
+                    || e instanceof SocketException) {
+                return true;
+            }
+            e = e.getCause();
+        }
+        return false;
     }
 
     private static String fetch() throws Exception {
         HttpURLConnection conn = (HttpURLConnection) new URL(PASTE).openConnection();
         try {
-            conn.setConnectTimeout(2500);
-            conn.setReadTimeout(2500);
+            conn.setConnectTimeout(4000);
+            conn.setReadTimeout(4000);
             conn.setUseCaches(false);
             conn.setInstanceFollowRedirects(true);
             conn.setRequestProperty("User-Agent",
@@ -68,7 +142,7 @@ final class License {
             while ((n = in.read(buf)) != -1) {
                 out.write(buf, 0, n);
                 total += n;
-                if (total > 512) {
+                if (total > 2048) {
                     break;
                 }
             }
@@ -84,7 +158,7 @@ final class License {
             return null;
         }
         Matcher m = DATE.matcher(body);
-        if (!m.find()) {
+        if (!m.matches()) {
             return null;
         }
         int y = Integer.parseInt(m.group(1));

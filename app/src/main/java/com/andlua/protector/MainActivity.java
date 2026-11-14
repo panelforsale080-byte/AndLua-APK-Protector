@@ -101,19 +101,24 @@ public class MainActivity extends Activity {
                             status.setText(getString(R.string.idle));
                         }
                     });
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     main.post(new Runnable() {
                         @Override
                         public void run() {
-                            pickBtn.setEnabled(false);
-                            appsBtn.setEnabled(false);
-                            status.setText(getString(R.string.expired));
-                            logView.setText(getString(R.string.expired_help));
+                            showDenied(e);
                         }
                     });
                 }
             }
         }).start();
+    }
+
+    private void showDenied(Exception e) {
+        boolean offline = e != null && License.OFFLINE.equals(e.getMessage());
+        pickBtn.setEnabled(false);
+        appsBtn.setEnabled(false);
+        status.setText(getString(offline ? R.string.no_internet : R.string.expired));
+        logView.setText(getString(offline ? R.string.no_internet : R.string.expired_help));
     }
 
     private void runProtect() {
@@ -188,8 +193,16 @@ public class MainActivity extends Activity {
         protecting = false;
         logView.setText(getString(R.string.help));
         if (workError != null) {
-            status.setText(getString(R.string.failed));
-            toast(getString(R.string.failed));
+            if (License.OFFLINE.equals(workError.getMessage())) {
+                status.setText(getString(R.string.no_internet));
+                toast(getString(R.string.no_internet));
+            } else if (License.EXPIRED.equals(workError.getMessage())) {
+                status.setText(getString(R.string.expired));
+                toast(getString(R.string.expired));
+            } else {
+                status.setText(getString(R.string.failed));
+                toast(getString(R.string.failed));
+            }
             return;
         }
         animateProgress(100);
