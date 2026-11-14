@@ -4,6 +4,7 @@ import android.util.Base64;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.NoRouteToHostException;
@@ -23,11 +24,6 @@ import java.util.regex.Pattern;
 final class License {
     static final String OFFLINE = "offline";
     static final String EXPIRED = "expired";
-    static final String PASTE =
-            "https://raw.githubusercontent.com/Axcelpogi190/PasswordAndLicense/main/AndluaKey";
-    /** SubjectPublicKeyInfo for the AndluaKey signer. The private key is not in this app. */
-    private static final String PUBLIC_KEY =
-            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6Sop895ZLE9EXQkJXFl6a8ZFNbpzGJfuMxXteBY0L5OAVRbBpdCQm5W+an4doyJmxQ6VWxTi4afMdG6wR0FDVAtP+HrlKd8Si/rfYA7qQm3JZDYWA/7Ryy4nGaawztxcwMIdQxwTkC2P73y6UGsPr9j4neaMAI8rLCNUOfS/bnVYh/VBrNMap2hoFH7LYNgig9ZXqFwvXXi3OsLk9EYjr7Cb/Y+nScxQ+bHjOpLvJI2OwS9OEetIeZx0kB0huBBtKo2tQKPLO0OvINrBAv57qcfpmlzvx8XQzAgEQobZwbFKHv+di1B7pI83jboQRxwkWVSOfQ1T2aBzXI6npC4IxQIDAQAB";
     private static final Pattern DATE =
             Pattern.compile("(\\d{4})[/.-](\\d{1,2})[/.-](\\d{1,2})");
 
@@ -66,7 +62,7 @@ final class License {
 
     private static boolean verify(String dateLine, String sigLine) {
         try {
-            byte[] pub = Base64.decode(PUBLIC_KEY, Base64.DEFAULT);
+            byte[] pub = Base64.decode(Sealed.publicKey(), Base64.DEFAULT);
             PublicKey key = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pub));
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initVerify(key);
@@ -122,7 +118,7 @@ final class License {
     }
 
     private static String fetch() throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL(PASTE).openConnection();
+        HttpURLConnection conn = (HttpURLConnection) new URL(Sealed.endpoint()).openConnection();
         try {
             conn.setConnectTimeout(4000);
             conn.setReadTimeout(4000);
@@ -182,5 +178,102 @@ final class License {
             return cm > mo;
         }
         return cd > d;
+    }
+
+    /** Address and verifier material. Stored as a rolling mix, not as text. */
+    private static final class Sealed {
+        private static final int[] A0 = {
+            60, 203, 127, 176, 97, 28, 61, 255, 249, 123, 112, 175,
+            125, 16, 127, 51, 142, 165, 215, 16, 241, 119, 145, 50,
+            89, 33
+        };
+
+        private static final int[] A1 = {
+            54, 2, 213, 56, 165, 56, 246, 69, 33, 212, 6, 160,
+            174, 41, 90, 160, 222, 88, 205, 21, 48, 177, 170, 216,
+            236, 228, 222
+        };
+
+        private static final int[] A2 = {
+            202, 181, 78, 166, 122, 156, 158, 2, 129, 200, 51, 171,
+            85, 117, 213, 34, 39, 15, 15, 141, 30, 193, 101, 35,
+            240, 25, 249
+        };
+
+        private static final int[] B0 = {
+            25, 246, 66, 130, 91, 76, 83, 158, 201, 125, 108, 240,
+            114, 18, 98, 28, 194, 176, 146, 33, 213, 84, 183, 27,
+            118, 20, 28, 47, 224, 71, 254, 22, 214, 35, 41, 238,
+            38, 162, 137, 26, 116, 150, 242, 40, 194, 118, 112, 145,
+            243, 146, 170, 201, 253, 253, 232, 74, 144, 79, 187, 189,
+            57, 162, 202, 118, 175, 66, 66, 242, 5, 43, 80, 52,
+            164, 48, 203, 101, 15, 195, 36, 244, 83, 54, 149, 49,
+            219, 121, 215, 107, 18, 129, 68, 96, 248, 52, 22, 100,
+            103, 148, 150, 50, 152, 222, 180, 104, 57, 168, 221, 217,
+            37, 211, 105, 81, 122, 46, 137, 192, 182, 38, 162, 244,
+            117, 153, 183, 225, 41, 238, 49, 199, 178, 36
+        };
+
+        private static final int[] B1 = {
+            61, 231, 70, 11, 12, 239, 5, 2, 35, 217, 18, 17,
+            79, 140, 47, 230, 136, 204, 228, 223, 27, 54, 22, 116,
+            187, 80, 153, 112, 210, 185, 240, 53, 134, 195, 151, 87,
+            108, 103, 168, 240, 90, 41, 112, 64, 11, 192, 132, 215,
+            16, 214, 1, 7, 225, 248, 41, 184, 79, 50, 240, 14,
+            103, 229, 240, 46, 237, 153, 222, 107, 238, 16, 80, 114,
+            145, 143, 39, 13, 40, 249, 224, 123, 122, 110, 171, 118,
+            8, 174, 237, 205, 119, 51, 60, 226, 231, 240, 40, 53,
+            136, 91, 175, 186, 110, 207, 202, 154, 239, 2, 165, 211,
+            250, 13, 145, 210, 0, 46, 167, 83, 212, 253, 162, 155,
+            240, 149, 237, 219, 191, 116, 29, 232, 240, 201, 246
+        };
+
+        private static final int[] B2 = {
+            13, 152, 194, 103, 88, 1, 216, 1, 188, 37, 208, 72,
+            193, 161, 216, 203, 65, 155, 66, 131, 231, 228, 209, 57,
+            204, 92, 240, 46, 142, 67, 15, 186, 228, 148, 195, 27,
+            105, 8, 171, 96, 97, 36, 249, 125, 15, 15, 211, 82,
+            96, 47, 96, 213, 27, 255, 42, 200, 28, 103, 235, 231,
+            26, 32, 243, 215, 179, 15, 106, 97, 31, 109, 244, 176,
+            118, 111, 172, 31, 47, 169, 51, 192, 83, 164, 111, 220,
+            217, 52, 143, 49, 230, 14, 9, 49, 120, 229, 2, 188,
+            44, 84, 112, 17, 250, 72, 53, 70, 134, 229, 210, 82,
+            26, 70, 231, 52, 244, 223, 12, 137, 113, 44, 1, 94,
+            242, 104, 161, 183, 29, 61, 115, 43, 90, 143, 61
+        };
+
+        private Sealed() {}
+
+        static String endpoint() {
+            return open(A0, A1, A2);
+        }
+
+        static String publicKey() {
+            return open(B0, B1, B2);
+        }
+
+        private static String open(int[] a, int[] b, int[] c) {
+            char[] out = new char[a.length + b.length + c.length];
+            int at = 0;
+            int state = 0x5A17C3E1;
+            int[][] parts = new int[][] {a, b, c};
+            for (int p = 0; p < parts.length; p++) {
+                int[] part = parts[p];
+                for (int i = 0; i < part.length; i++) {
+                    state = mix(state);
+                    out[at++] = (char) (part[i] ^ (state & 0xFF));
+                }
+            }
+            String value = new String(out);
+            Arrays.fill(out, '\0');
+            return value;
+        }
+
+        private static int mix(int s) {
+            s ^= s << 13;
+            s ^= s >>> 17;
+            s ^= s << 5;
+            return s;
+        }
     }
 }
