@@ -25,7 +25,9 @@ jobs:
           cache: gradle
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools platforms;android-34 build-tools;34.0.0
 
       - name: Grant Gradle execute permission
         run: chmod +x gradlew
@@ -46,10 +48,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
-          NAME="AndLua-Protector-1.5.0.apk"
+          NAME="Xorel-2.1.0.apk"
           cp "$APK" "/tmp/${NAME}"
-          gh release delete "v1.5.0" -y 2>/dev/null || true
-          gh release create "v1.5.0" \
-            --title "AndLua Protector v1.5.0" \
-            --notes "Working seal restored. alpprotect.key and alpprotect.launcher are not in assets. Protector expiry still uses pastebin (YYYY/MM/DD)." \
+          gh release delete "v2.1.0" -y 2>/dev/null || true
+          gh release create "v2.1.0" \
+            --title "Xorel v2.1.0" \
+            --notes "HKDF-SHA256 key derivation, AES-GCM wrapped master key, backup and debuggable turned off on the sealed app." \
             "/tmp/${NAME}#${NAME}"

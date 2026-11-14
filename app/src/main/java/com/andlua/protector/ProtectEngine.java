@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 final class ProtectEngine {
@@ -44,30 +45,34 @@ final class ProtectEngine {
             }
 
             byte[] key = AesLayer.randomKey();
-            byte[] certSha = MessageDigest.getInstance("SHA-256").digest(Signer.certDer(ctx));
-            String encodedKey = Base64.encodeToString(
-                    AesLayer.xor(key, AesLayer.deriveStorageMask(pkg, certSha)), Base64.NO_WRAP);
+            String encodedKey;
+            try {
+                byte[] certSha = MessageDigest.getInstance("SHA-256").digest(Signer.certDer(ctx));
+                encodedKey = Base64.encodeToString(AesLayer.sealMaster(pkg, certSha, key), Base64.NO_WRAP);
 
-            List<String> luaPaths = new ArrayList<>();
-            for (InputSource src : apk.getInputSources()) {
-                String name = src.getName();
-                if (name != null && name.startsWith("assets/") && name.toLowerCase().endsWith(".lua")) {
-                    luaPaths.add(name);
+                List<String> luaPaths = new ArrayList<>();
+                for (InputSource src : apk.getInputSources()) {
+                    String name = src.getName();
+                    if (name != null && name.startsWith("assets/") && name.toLowerCase().endsWith(".lua")) {
+                        luaPaths.add(name);
+                    }
                 }
-            }
-            if (luaPaths.isEmpty()) {
-                throw new IllegalStateException("This package cannot be sealed");
-            }
+                if (luaPaths.isEmpty()) {
+                    throw new IllegalStateException("This package cannot be sealed");
+                }
 
-            for (String path : luaPaths) {
-                InputSource src = apk.getInputSource(path);
-                byte[] raw = readSource(src);
-                if (AesLayer.isWrapped(raw)) {
-                    continue;
+                for (String path : luaPaths) {
+                    InputSource src = apk.getInputSource(path);
+                    byte[] raw = readSource(src);
+                    if (AesLayer.isWrapped(raw)) {
+                        continue;
+                    }
+                    byte[] wrapped = AesLayer.wrap(key, raw);
+                    apk.removeInputSource(path);
+                    apk.add(new ByteInputSource(wrapped, path));
                 }
-                byte[] wrapped = AesLayer.wrap(key, raw);
-                apk.removeInputSource(path);
-                apk.add(new ByteInputSource(wrapped, path));
+            } finally {
+                Arrays.fill(key, (byte) 0);
             }
 
             stripSignatures(apk);
@@ -81,6 +86,9 @@ final class ProtectEngine {
             apk.add(new ByteInputSource(originalLauncher.getBytes(StandardCharsets.UTF_8), LAUNCHER_ENTRY));
 
             manifest.setMainActivityClassName(GATE);
+            ResXmlElement application = manifest.getOrCreateApplicationElement();
+            application.getOrCreateAndroidAttribute("debuggable", 0x0101000f).setValueAsBoolean(false);
+            application.getOrCreateAndroidAttribute("allowBackup", 0x01010280).setValueAsBoolean(false);
             ResXmlElement original = manifest.getOrCreateActivity(originalLauncher, false);
             ResXmlAttribute exported = original.getOrCreateAndroidAttribute(
                     AndroidManifestBlock.NAME_exported, AndroidManifestBlock.ID_exported);

@@ -13,6 +13,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -65,7 +66,17 @@ final class AlpRuntime {
                 try (FileOutputStream out = new FileOutputStream(dest)) {
                     out.write(data);
                 }
+                if (data != null) {
+                    Arrays.fill(data, (byte) 0);
+                }
+                dest.setReadable(false, false);
+                dest.setWritable(false, false);
+                dest.setExecutable(false, false);
+                dest.setReadable(true, true);
+                dest.setWritable(true, true);
             }
+        } finally {
+            Arrays.fill(key, (byte) 0);
         }
 
         PackageInfo pi = ctx.getPackageManager().getPackageInfo(pkg, 0);

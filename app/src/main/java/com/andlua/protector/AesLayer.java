@@ -2,10 +2,11 @@ package com.andlua.protector;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 import javax.crypto.Cipher;
+import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -17,7 +18,6 @@ final class AesLayer {
     private static final int NONCE_LEN = 12;
     private static final int SALT_LEN = 16;
     private static final int TAG_BITS = 128;
-    private static final int ROUNDS = 16384;
     private static final int[] PEPPER = {
             0xA7, 0x31, 0xC4, 0x19, 0x8E, 0x5B, 0xF0, 0x62,
             0x3D, 0xAA, 0x07, 0xD1, 0x94, 0x2C, 0xE8, 0x51,
@@ -83,23 +83,14 @@ final class AesLayer {
         return unpad(gcmDecryptRaw(k1, inner));
     }
 
-    static byte[] deriveStorageMask(String packageName, byte[] certSha256) throws Exception {
-        MessageDigest sha = MessageDigest.getInstance("SHA-256");
-        sha.update(pepper());
-        sha.update("XOREL-KEY-MASK-v3".getBytes(StandardCharsets.UTF_8));
-        sha.update(packageName.getBytes(StandardCharsets.UTF_8));
-        if (certSha256 != null) {
-            sha.update(certSha256);
+    /** AES-256-GCM wrap of the file key. The wrapping key is HKDF(pepper, cert, package). */
+    static byte[] sealMaster(String packageName, byte[] certSha256, byte[] master) throws Exception {
+        byte[] kek = kek(packageName, certSha256);
+        try {
+            return gcmEncrypt(kek, master);
+        } finally {
+            Arrays.fill(kek, (byte) 0);
         }
-        return sha.digest();
-    }
-
-    static byte[] xor(byte[] a, byte[] b) {
-        byte[] out = new byte[a.length];
-        for (int i = 0; i < a.length; i++) {
-            out[i] = (byte) (a[i] ^ b[i % b.length]);
-        }
-        return out;
     }
 
     static byte[] stripBanner(byte[] data) {
@@ -179,24 +170,49 @@ final class AesLayer {
         return out;
     }
 
+    private static byte[] kek(String packageName, byte[] certSha256) throws Exception {
+        byte[] info = ("XOREL-KEK-v4\0" + packageName).getBytes(StandardCharsets.UTF_8);
+        return hkdf(pepper(), certSha256, info, 32);
+    }
+
+    /** Two independent AES-256 keys from one master, via HKDF-SHA256. */
     private static byte[] stretch(byte[] master, byte[] salt, String info) throws Exception {
-        MessageDigest sha = MessageDigest.getInstance("SHA-256");
-        sha.update(master);
-        sha.update(salt);
-        sha.update(info.getBytes(StandardCharsets.UTF_8));
-        sha.update(pepper());
-        byte[] out = sha.digest();
-        for (int i = 1; i < ROUNDS; i++) {
-            sha.reset();
-            sha.update(out);
-            sha.update(salt);
-            sha.update((byte) (i >>> 24));
-            sha.update((byte) (i >>> 16));
-            sha.update((byte) (i >>> 8));
-            sha.update((byte) i);
-            out = sha.digest();
+        byte[] ikm = new byte[master.length + 32];
+        byte[] pep = pepper();
+        System.arraycopy(master, 0, ikm, 0, master.length);
+        System.arraycopy(pep, 0, ikm, master.length, pep.length);
+        try {
+            return hkdf(ikm, salt, info.getBytes(StandardCharsets.UTF_8), 32);
+        } finally {
+            Arrays.fill(ikm, (byte) 0);
         }
-        return out;
+    }
+
+    private static byte[] hkdf(byte[] ikm, byte[] salt, byte[] info, int length) throws Exception {
+        Mac mac = Mac.getInstance("HmacSHA256");
+        byte[] realSalt = (salt == null || salt.length == 0) ? new byte[32] : salt;
+        mac.init(new SecretKeySpec(realSalt, "HmacSHA256"));
+        byte[] prk = mac.doFinal(ikm);
+        try {
+            byte[] okm = new byte[length];
+            byte[] block = new byte[0];
+            int pos = 0;
+            for (int counter = 1; pos < length; counter++) {
+                mac.init(new SecretKeySpec(prk, "HmacSHA256"));
+                mac.update(block);
+                if (info != null) {
+                    mac.update(info);
+                }
+                mac.update((byte) counter);
+                block = mac.doFinal();
+                int n = Math.min(block.length, length - pos);
+                System.arraycopy(block, 0, okm, pos, n);
+                pos += n;
+            }
+            return okm;
+        } finally {
+            Arrays.fill(prk, (byte) 0);
+        }
     }
 
     private static byte[] pepper() {
