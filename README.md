@@ -1,4 +1,4 @@
-# AndLua Protector
+# Xorel
 
 Select an APK from files or from installed apps. Protect starts automatically. Save to sdcard.
 

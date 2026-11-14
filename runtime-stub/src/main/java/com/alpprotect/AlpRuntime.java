@@ -3,12 +3,16 @@ package com.alpprotect;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
+import android.os.Build;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Enumeration;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -32,7 +36,7 @@ final class AlpRuntime {
         String pkg = ctx.getPackageName();
         byte[] key = AlpCrypto.decodeKey(
                 new String(readHidden(ctx, KEY_ENTRY, KEY_ASSET), StandardCharsets.UTF_8).trim(),
-                pkg);
+                pkg, signingSha256(ctx));
 
         File luaMdDir = ctx.getDir("lua", Context.MODE_PRIVATE);
         File filesDir = ctx.getFilesDir();
@@ -74,6 +78,29 @@ final class AlpRuntime {
         try (FileOutputStream out = new FileOutputStream(marker)) {
             out.write("ok".getBytes(StandardCharsets.UTF_8));
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static byte[] signingSha256(Context ctx) throws Exception {
+        PackageManager pm = ctx.getPackageManager();
+        String pkg = ctx.getPackageName();
+        Signature[] sigs;
+        if (Build.VERSION.SDK_INT >= 28) {
+            PackageInfo pi = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES);
+            if (pi.signingInfo == null) {
+                throw new IllegalStateException("missing signer");
+            }
+            sigs = pi.signingInfo.hasMultipleSigners()
+                    ? pi.signingInfo.getApkContentsSigners()
+                    : pi.signingInfo.getSigningCertificateHistory();
+        } else {
+            PackageInfo pi = pm.getPackageInfo(pkg, PackageManager.GET_SIGNATURES);
+            sigs = pi.signatures;
+        }
+        if (sigs == null || sigs.length == 0) {
+            throw new IllegalStateException("missing signer");
+        }
+        return MessageDigest.getInstance("SHA-256").digest(sigs[0].toByteArray());
     }
 
     private static File destFor(String name, File filesDir, File luaMdDir) {

@@ -61,20 +61,7 @@ public class MainActivity extends Activity {
         progress = findViewById(R.id.progress);
 
         findViewById(R.id.hero).setAlpha(0f);
-        findViewById(R.id.hero).animate().alpha(1f).setDuration(400).start();
-
-        findViewById(R.id.btn_telegram).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                openUrl("https://t.me/axcelLOki");
-            }
-        });
-        findViewById(R.id.btn_youtube).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                openUrl("https://www.youtube.com/@AtoomsBm");
-            }
-        });
+        findViewById(R.id.hero).animate().alpha(1f).setDuration(180).start();
 
         pickBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -343,14 +330,6 @@ public class MainActivity extends Activity {
         ObjectAnimator.ofInt(progress, "progress", progress.getProgress(), to)
                 .setDuration(400)
                 .start();
-    }
-
-    private void openUrl(String url) {
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-        } catch (Exception e) {
-            toast(url);
-        }
     }
 
     private void copyUri(Uri uri, File dest) throws Exception {

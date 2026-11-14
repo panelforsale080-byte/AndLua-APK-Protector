@@ -62,11 +62,14 @@ final class AlpCrypto {
         return unpad(gcmDecryptRaw(k1, inner));
     }
 
-    static byte[] deriveStorageMask(String packageName) throws Exception {
+    static byte[] deriveStorageMask(String packageName, byte[] certSha256) throws Exception {
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
         sha.update(pepper());
-        sha.update("AXL1-KEY-MASK-v2".getBytes(StandardCharsets.UTF_8));
+        sha.update("XOREL-KEY-MASK-v3".getBytes(StandardCharsets.UTF_8));
         sha.update(packageName.getBytes(StandardCharsets.UTF_8));
+        if (certSha256 != null) {
+            sha.update(certSha256);
+        }
         return sha.digest();
     }
 
@@ -78,9 +81,9 @@ final class AlpCrypto {
         return out;
     }
 
-    static byte[] decodeKey(String encoded, String packageName) throws Exception {
+    static byte[] decodeKey(String encoded, String packageName, byte[] certSha256) throws Exception {
         byte[] masked = Base64.decode(encoded, Base64.NO_WRAP);
-        return xor(masked, deriveStorageMask(packageName));
+        return xor(masked, deriveStorageMask(packageName, certSha256));
     }
 
     static byte[] stripBanner(byte[] data) {

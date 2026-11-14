@@ -15,7 +15,7 @@ public class GateActivity extends Activity {
         view.setTextColor(0xFFF3E5AB);
         view.setBackgroundColor(Color.BLACK);
         view.setPadding(48, 48, 48, 48);
-        view.setText("Axcel Loki");
+        view.setText("Xorel");
         setContentView(view);
 
         try {
@@ -27,7 +27,7 @@ public class GateActivity extends Activity {
             startActivity(intent);
             finish();
         } catch (Exception e) {
-            view.setText("Axcel Loki\n");
+            view.setText("Xorel\n");
             Toast.makeText(this, "Unable to open this package", Toast.LENGTH_LONG).show();
         }
     }

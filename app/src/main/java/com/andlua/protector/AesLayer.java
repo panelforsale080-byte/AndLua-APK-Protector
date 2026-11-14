@@ -13,15 +13,6 @@ final class AesLayer {
     static final byte[] MAGIC = new byte[]{'A', 'X', 'L', '1'};
     static final byte[] MAGIC_LEGACY = new byte[]{'A', 'L', 'P', '2'};
     static final String MARKER = "\n<<<AXL1>>>\n";
-    static final String BANNER =
-            "--[[\n"
-                    + "========================================================\n"
-                    + "   AXCEL LOKI\n"
-                    + "   Protected by Axcel Loki\n"
-                    + "   Telegram  https://t.me/axcelLOki\n"
-                    + "   YouTube   https://www.youtube.com/@AtoomsBm\n"
-                    + "========================================================\n"
-                    + "]]\n";
     private static final int VERSION = 2;
     private static final int NONCE_LEN = 12;
     private static final int SALT_LEN = 16;
@@ -65,7 +56,7 @@ final class AesLayer {
         buf.put((byte) VERSION);
         buf.put(salt);
         buf.put(b);
-        return withBanner(buf.array());
+        return buf.array();
     }
 
     static byte[] unwrap(byte[] master, byte[] blob) throws Exception {
@@ -92,11 +83,14 @@ final class AesLayer {
         return unpad(gcmDecryptRaw(k1, inner));
     }
 
-    static byte[] deriveStorageMask(String packageName) throws Exception {
+    static byte[] deriveStorageMask(String packageName, byte[] certSha256) throws Exception {
         MessageDigest sha = MessageDigest.getInstance("SHA-256");
         sha.update(pepper());
-        sha.update("AXL1-KEY-MASK-v2".getBytes(StandardCharsets.UTF_8));
+        sha.update("XOREL-KEY-MASK-v3".getBytes(StandardCharsets.UTF_8));
         sha.update(packageName.getBytes(StandardCharsets.UTF_8));
+        if (certSha256 != null) {
+            sha.update(certSha256);
+        }
         return sha.digest();
     }
 
@@ -105,16 +99,6 @@ final class AesLayer {
         for (int i = 0; i < a.length; i++) {
             out[i] = (byte) (a[i] ^ b[i % b.length]);
         }
-        return out;
-    }
-
-    private static byte[] withBanner(byte[] encrypted) {
-        byte[] banner = BANNER.getBytes(StandardCharsets.UTF_8);
-        byte[] mark = MARKER.getBytes(StandardCharsets.UTF_8);
-        byte[] out = new byte[banner.length + mark.length + encrypted.length];
-        System.arraycopy(banner, 0, out, 0, banner.length);
-        System.arraycopy(mark, 0, out, banner.length, mark.length);
-        System.arraycopy(encrypted, 0, out, banner.length + mark.length, encrypted.length);
         return out;
     }
 

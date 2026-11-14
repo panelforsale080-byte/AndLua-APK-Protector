@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,8 +44,9 @@ final class ProtectEngine {
             }
 
             byte[] key = AesLayer.randomKey();
+            byte[] certSha = MessageDigest.getInstance("SHA-256").digest(Signer.certDer(ctx));
             String encodedKey = Base64.encodeToString(
-                    AesLayer.xor(key, AesLayer.deriveStorageMask(pkg)), Base64.NO_WRAP);
+                    AesLayer.xor(key, AesLayer.deriveStorageMask(pkg, certSha)), Base64.NO_WRAP);
 
             List<String> luaPaths = new ArrayList<>();
             for (InputSource src : apk.getInputSources()) {
